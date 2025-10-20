@@ -93,6 +93,15 @@ NumberPreviewOld::NumberPreviewOld(std::string number) : numerics() {
     }
 }
 
+inline std::string numberDouble(std::uint32_t num, std::uint32_t levels)
+{
+    std::string retval;
+    while(levels > 0 && num < std::pow(10,levels--))
+        retval += '0';
+    retval += std::to_string(num);
+    return retval;
+}
+
 std::string NumberPreviewOld::full(NumberFormat format) {
     constexpr auto _formatBeauty = "+%s (%s) %s-%s-%s";
     constexpr auto _formatShort = "+%s%s%s%s%s";
