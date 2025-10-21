@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <functional>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -127,15 +128,15 @@ NumberPreview::NumberPreview(std::string number) {
         std::vector<int> _cods;
         auto iter = std::end(cdb._class);
         x = static_cast<int>((_numerics & 0xFFFFFFFFFFFF) / 10000000000ul);
-        _cods.push_back(x);
-        _cods.push_back(x/10);
-        _cods.push_back(x/100);
         if(x < 10)
         {
-            x = (_numerics & 0xFFFFFFFFFFFF) / 100000000ul;
-            _cods.push_back(x);
-            _cods.push_back(x / 10);
+            y = (_numerics & 0xFFFFFFFFFFFF) / 100000000ul;
+            _cods.push_back(y);
+            _cods.push_back(y / 10);
         }
+        _cods.push_back(x/10);
+        _cods.push_back(x/100);
+        _cods.push_back(x);
         for(y = 0; y < _cods.size() && iter == std::end(cdb._class); ++y)
         {
             x = _cods[y];
@@ -244,10 +245,14 @@ CountryCodeDB::CountryCodeDB(const char *classFieldRaw)
                 // Number
                 else if(p[y] == 'c')
                 {
-                    std::istringstream stream(std::move(std::string(p + y+2,x-y-2)));
                     std::string _t;
-                    while(std::getline(stream, _t, '-'))
+                    std::istringstream stream(std::move(std::string(p + y+2,x-y-2)));
+                    while(std::getline(stream, _t, ','))
+                    {
+                        auto new_end = std::remove_if(std::begin(_t), std::end(_t), std::bind(std::equal_to<char>(), std::placeholders::_1, '-'));
+                        _t.erase(new_end, std::end(_t));
                         cIn.codes.push_back(std::atoi(_t.c_str()));
+                    }
                 }
                 // Dial code
                 else if(p[y]=='d')
