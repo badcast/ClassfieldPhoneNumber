@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <functional>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -28,22 +29,25 @@ struct CountryCode
     std::vector<std::uint32_t> codes;
     std::string country;
     std::string dialcode;
+    std::string localCode;
 
     CountryCode() = default;
     CountryCode(const CountryCode&) = default;
-    CountryCode(CountryCode&& other) : codes(std::move(other.codes)), country(std::move(other.country)), dialcode(std::move(other.dialcode)){}
+    CountryCode(CountryCode&& other) : codes(std::move(other.codes)), country(std::move(other.country)), dialcode(std::move(other.dialcode)), localCode(std::move(other.localCode)){}
 
     CountryCode& operator =(const CountryCode& other){
         codes = other.codes;
         country = other.country;
         dialcode = other.dialcode;
+        localCode = other.localCode;
         return *this;
     }
 
     CountryCode& operator =(CountryCode&& other){
-        codes = (std::move(other.codes));
-        country = (std::move(other.country));
-        dialcode = (std::move(other.dialcode));
+        codes = std::move(other.codes);
+        country = std::move(other.country);
+        dialcode = std::move(other.dialcode);
+        localCode = std::move(other.localCode);
         return *this;
     }
 };
@@ -58,22 +62,29 @@ public:
     CountryCodeDB &operator=(const CountryCodeDB &) = default;
     CountryCodeDB &operator=(CountryCodeDB &&) = default;
     CountryCodeDB(const char *classFieldRaw);
+    inline std::vector<int> localCodes() const{
+        return _localCodes;
+    }
 
     static const CountryCodeDB &instance();
     static std::string country(int code);
     static std::string dialcode(int code);
     static CountryCode countryCode(int code);
-private:
 
+private:
+    std::vector<int> _localCodes;
     std::vector<CountryCode> _class;
 
     static const CountryCodeDB __instance;
 };
 
-enum NumberFormat
+enum NumberFormat : int
 {
-    Beauty,
-    Short
+    Beauty = 0,
+    Compact = 1,
+
+    Global = 0,
+    Local = 2
 };
 
 class NumberPreview
@@ -81,7 +92,7 @@ class NumberPreview
 public:
     NumberPreview(std::string phoneNumber);
 
-    std::string full(NumberFormat format = NumberFormat::Beauty);
+    std::string format(int numberFormatFlag = NumberFormat::Beauty) const;
 
     bool isGenericNumber() const;
     bool isEmpty() const;
@@ -93,73 +104,91 @@ public:
 private:
     std::uint64_t _numerics;
     int _countryCode;
-    std::string numberDouble(std::uint32_t num, std::uint32_t levels);
+    std::string numberDouble(std::uint32_t num, std::uint32_t levels) const;
 };
 
 NumberPreview::NumberPreview(std::string number) {
     int x,y;
     const CountryCodeDB &cdb = CountryCodeDB::instance();
-    std::string phoneNumber = number;
     x = 0;
     // remove all ignoring case [ + - ( ) ] and whitespaces
-    auto new_end = std::remove_if(std::begin(phoneNumber), std::end(phoneNumber), [&x](auto & item){
+    auto new_end = std::remove_if(std::begin(number), std::end(number), [&x](auto & item){
         return item == '+' || item == '-' || item == '(' || item == ')' || std::isspace(item) || !std::isdigit(item) && (x = 1);
     });
-    if(x)
     // End with no digital number are.
-    return;
-    phoneNumber.erase(new_end, phoneNumber.end());
+    if(x)
+        return;
+    number.erase(new_end, number.end());
     std::uint8_t x0=0;
-    for(x = 0; x < phoneNumber.size(); ++x)
+    for(x = 0; x < number.size(); ++x)
     {
-        if(phoneNumber[x] != '0')
+        if(number[x] != '0')
             break;
         ++x0;
     }
 
     // str to number and write Null value to high bits.
-    _numerics = (std::atoll(phoneNumber.c_str()) & 0xFFFFFFFFFFFF);
+    _numerics = (std::atoll(number.c_str()) & 0xFFFFFFFFFFFF);
     _numerics |= static_cast<std::uint64_t>(x0) << 48;
 
     _countryCode = (0);
     if(isGenericNumber())
     {
-        std::vector<int> _cods;
         auto iter = std::end(cdb._class);
-        x = static_cast<int>((_numerics & 0xFFFFFFFFFFFF) / 10000000000ul);
-        _cods.push_back(x);
-        _cods.push_back(x/10);
-        _cods.push_back(x/100);
-        if(x < 10)
+        x = number[x]-'0';
+        if(std::end(cdb._localCodes) != std::find(std::begin(cdb._localCodes), std::end(cdb._localCodes), x))
         {
-            x = (_numerics & 0xFFFFFFFFFFFF) / 100000000ul;
-            _cods.push_back(x);
-            _cods.push_back(x / 10);
-        }
-        for(y = 0; y < _cods.size() && iter == std::end(cdb._class); ++y)
-        {
-            x = _cods[y];
-            if(x < 0)
-                continue;
+            _numerics |= 1ull << 63;
             iter = std::find_if(std::begin(cdb._class), std::end(cdb._class),
-                                [x](auto &ref) {
+                                [x](const CountryCode &ref) {
                                     for (int i = 0; i < ref.codes.size(); ++i)
-                                        if (ref.codes[i] == x)
+                                        if ((ref.localCode[i]-'0') == x)
                                             return true;
                                     return false;
                                 });
+
+        }
+        else
+        {
+            std::vector<int> _cods;
+            x = static_cast<int>((_numerics & 0xFFFFFFFFFFFF) / 10000000000ul);
+            if(x < 10)
+            {
+                y = (_numerics & 0xFFFFFFFFFFFF) / 100000000ul;
+                _cods.push_back(y);
+                _cods.push_back(y / 10);
+            }
+            _cods.push_back(x/10);
+            _cods.push_back(x/100);
+            _cods.push_back(x);
+
+            for(y = 0; y < _cods.size() && iter == std::end(cdb._class); ++y)
+            {
+                x = _cods[y];
+                if(x <= 0)
+                    continue;
+                iter = std::find_if(std::begin(cdb._class), std::end(cdb._class),
+                                    [x](auto &ref) {
+                                        for (int i = 0; i < ref.codes.size(); ++i)
+                                            if (ref.codes[i] == x)
+                                                return true;
+                                        return false;
+                                    });
+            }
         }
         if(iter != std::end(cdb._class))
             _countryCode = iter->codes.at(0);
+
     }
 }
 
 
-std::string NumberPreview::full(NumberFormat format) {
+std::string NumberPreview::format(int numberFormatFlag) const {
+    const CountryCode ccdb = CountryCodeDB::countryCode(countryCode());
     std::string result;
     std::uint64_t _raw;
-    int x,y,len;
-    x = (_numerics >> 48) & 0xFFFF;
+    int x,y,z;
+    x = (_numerics >> 48) & 0xFF;
     result.append(x,'0');
     _raw = _numerics & 0xFFFFFFFFFFFF;
     if(isGenericNumber())
@@ -167,19 +196,35 @@ std::string NumberPreview::full(NumberFormat format) {
         constexpr std::uint8_t vectors[] {3,3,3,2,2};
         std::array<char[8], 5> _parts;
         std::uint64_t tmp,tmp0;
+        std::string _temp;
         for( x = _parts.size() - 1; x > -1; --x)
         {
             int p = std::pow(10, vectors[x]);
             tmp0 = _raw / p;
             tmp = _raw - tmp0 * p;
             _raw = tmp0;
-            std::snprintf(_parts[x], 15, "%s", x > 0 ? numberDouble(tmp, vectors[x]).c_str() : std::to_string(tmp).c_str());
+            if(x == 0)
+            {
+                // bit flag is they are Local data.
+                if((_numerics & 0x8000000000000000))
+                    tmp = _countryCode;
+                _temp = std::move(((numberFormatFlag & 0x2) != 0) ? ccdb.localCode.c_str() : ("+" + std::to_string(tmp)).c_str());
+            }
+            else if(x == 1)
+            {
+                _temp = std::move(numberDouble(tmp, vectors[x]));
+            }
+            else
+            {
+                _temp = std::move(numberDouble(tmp, vectors[x]));
+            }
+            std::snprintf(_parts[x], 8, "%s", _temp.c_str());
         }
         result.resize(64);
-        len = std::snprintf(result.data(), 64, (format == NumberFormat::Beauty ? "+%s (%s) %s-%s-%s" : "+%s%s%s%s%s"),
-                            _parts[0], _parts[1], _parts[2],
-                            _parts[3], _parts[4]);
-        result.resize(result.size() - 64 + len);
+        z = std::snprintf(result.data(), 64, ((numberFormatFlag & 0x1) == NumberFormat::Beauty ? "%s (%s) %s-%s-%s" : "%s%s%s%s%s"),
+                          _parts[0], _parts[1], _parts[2],
+                          _parts[3], _parts[4]);
+        result.resize(result.size() - 64 + z);
     }
     else
     {
@@ -191,7 +236,7 @@ std::string NumberPreview::full(NumberFormat format) {
 
 inline bool NumberPreview::isGenericNumber() const
 {
-    return _numerics <= 9999999999999ul && _numerics >= 10000000000ul;
+    return (_numerics & 0x8000000000000000) != 0 || _numerics <= 9999999999999ul && _numerics >= 10000000000ul;
 }
 
 inline bool NumberPreview::isEmpty() const
@@ -215,11 +260,12 @@ inline int NumberPreview::countryCode() const
 }
 
 std::string NumberPreview::numberDouble(std::uint32_t num,
-                                        std::uint32_t levels) {
+                                        std::uint32_t levels) const {
     std::string retval;
     while (levels > 0 && num < std::pow(10, --levels))
         retval += '0';
-    retval += std::to_string(num);
+    if(num > 0)
+        retval += std::to_string(num);
     return retval;
 }
 
@@ -231,7 +277,7 @@ CountryCodeDB::CountryCodeDB(const char *classFieldRaw)
     while((pLeft = strchr(p, '\n')) != nullptr)
     {
         CountryCode cIn {};
-        l = pLeft - p;
+        l = static_cast<int>(pLeft - p);
         for(x = 0, y = 0; x < l; ++x)
         {
             if(p[x] == ';' || x == l-1)
@@ -244,21 +290,34 @@ CountryCodeDB::CountryCodeDB(const char *classFieldRaw)
                 // Number
                 else if(p[y] == 'c')
                 {
-                    std::istringstream stream(std::move(std::string(p + y+2,x-y-2)));
                     std::string _t;
-                    while(std::getline(stream, _t, '-'))
+                    std::istringstream stream(std::move(std::string(p + y+2,x-y-2)));
+                    while(std::getline(stream, _t, ','))
+                    {
+                        auto new_end = std::remove_if(std::begin(_t), std::end(_t), std::bind(std::equal_to<char>(), std::placeholders::_1, '-'));
+                        _t.erase(new_end, std::end(_t));
                         cIn.codes.push_back(std::atoi(_t.c_str()));
+                    }
                 }
                 // Dial code
                 else if(p[y]=='d')
                 {
-                    cIn.dialcode = std::move(std::string(p + y+2,x-y-1));
+                    cIn.dialcode = std::move(std::string(p + y+2,x-y-2));
+                }
+                // Local code
+                else if(p[y]=='l')
+                {
+                    cIn.localCode = std::move(std::string(p + y + 2,x-y-1));
                 }
                 y = x+1;
             }
         }
+        x = std::atoi(cIn.localCode.c_str());
+        y = cIn.localCode.empty();
         _class.push_back(std::move(cIn));
         p = pLeft + 1;
+        if(!y && x != 1 && std::end(_localCodes) == std::find(std::begin(_localCodes), std::end(_localCodes), x))
+            _localCodes.push_back(x);
     }
 
     auto _sqr = [](const std::vector<std::uint32_t> & v) -> std::uint32_t {std::uint32_t retval = 0; for(std::uint32_t val : v) { retval += val * val; }  return retval;} ;
@@ -289,21 +348,21 @@ inline CountryCode CountryCodeDB::countryCode(int code)
     const CountryCodeDB & cdb = instance();
 
     auto iter = std::find_if(std::begin(cdb._class), std::end(cdb._class),
-                        [code](auto &ref) {
-                            for (int i = 0; i < ref.codes.size(); ++i)
-                                if (ref.codes[i] == code)
-                                    return true;
-                            return false;
-                        });
+                             [code](auto &ref) {
+                                 for (int i = 0; i < ref.codes.size(); ++i)
+                                     if (ref.codes[i] == code)
+                                         return true;
+                                 return false;
+                             });
     if(iter != std::end(cdb._class))
     {
         cc = *iter;
     }
     else
     {
-    cc.country = "Unknown";
-    cc.dialcode = "UNKNOWN";
-    cc.codes.push_back(static_cast<std::uint32_t>(0));
+        cc.country = "Unknown";
+        cc.dialcode = "UNKNOWN";
+        cc.codes.push_back(static_cast<std::uint32_t>(0));
     }
     return cc;
 }
