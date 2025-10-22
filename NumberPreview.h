@@ -82,7 +82,7 @@ class NumberPreview
 public:
     NumberPreview(std::string phoneNumber);
 
-    std::string full(NumberFormat format = NumberFormat::Beauty);
+    std::string full(NumberFormat format = NumberFormat::Beauty) const;
 
     bool isGenericNumber() const;
     bool isEmpty() const;
@@ -94,7 +94,7 @@ public:
 private:
     std::uint64_t _numerics;
     int _countryCode;
-    std::string numberDouble(std::uint32_t num, std::uint32_t levels);
+    std::string numberDouble(std::uint32_t num, std::uint32_t levels) const;
 };
 
 NumberPreview::NumberPreview(std::string number) {
@@ -156,7 +156,7 @@ NumberPreview::NumberPreview(std::string number) {
 }
 
 
-std::string NumberPreview::full(NumberFormat format) {
+std::string NumberPreview::full(NumberFormat format) const {
     std::string result;
     std::uint64_t _raw;
     int x,y,len;
@@ -216,7 +216,7 @@ inline int NumberPreview::countryCode() const
 }
 
 std::string NumberPreview::numberDouble(std::uint32_t num,
-                                        std::uint32_t levels) {
+                                        std::uint32_t levels) const {
     std::string retval;
     while (levels > 0 && num < std::pow(10, --levels))
         retval += '0';
