@@ -140,7 +140,7 @@ NumberPreview::NumberPreview(std::string number) {
         for(y = 0; y < _cods.size() && iter == std::end(cdb._class); ++y)
         {
             x = _cods[y];
-            if(x < 0)
+            if(x <= 0)
                 continue;
             iter = std::find_if(std::begin(cdb._class), std::end(cdb._class),
                                 [x](auto &ref) {
@@ -160,7 +160,7 @@ std::string NumberPreview::full(NumberFormat format) {
     std::string result;
     std::uint64_t _raw;
     int x,y,len;
-    x = (_numerics >> 48) & 0xFFFF;
+    x = (_numerics >> 48) & 0xFF;
     result.append(x,'0');
     _raw = _numerics & 0xFFFFFFFFFFFF;
     if(isGenericNumber())
@@ -174,7 +174,7 @@ std::string NumberPreview::full(NumberFormat format) {
             tmp0 = _raw / p;
             tmp = _raw - tmp0 * p;
             _raw = tmp0;
-            std::snprintf(_parts[x], 15, "%s", x > 0 ? numberDouble(tmp, vectors[x]).c_str() : std::to_string(tmp).c_str());
+            std::snprintf(_parts[x], 8, "%s", x > 0 ? numberDouble(tmp, vectors[x]).c_str() : std::to_string(tmp).c_str());
         }
         result.resize(64);
         len = std::snprintf(result.data(), 64, (format == NumberFormat::Beauty ? "+%s (%s) %s-%s-%s" : "+%s%s%s%s%s"),
@@ -232,7 +232,7 @@ CountryCodeDB::CountryCodeDB(const char *classFieldRaw)
     while((pLeft = strchr(p, '\n')) != nullptr)
     {
         CountryCode cIn {};
-        l = pLeft - p;
+        l = static_cast<int>(pLeft - p);
         for(x = 0, y = 0; x < l; ++x)
         {
             if(p[x] == ';' || x == l-1)
