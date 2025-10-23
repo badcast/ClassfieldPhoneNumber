@@ -3,6 +3,8 @@
 header('Content-Type: text/html; charset=utf-8');
 
 $input_query = '';
+$input_local = 0;
+$input_beautify = 0;
 $data = null;
 $error_message = null;
 $raw_output = null;
@@ -10,18 +12,19 @@ $raw_output = null;
 if (isset($_GET['query'])) {
 
     $input_query = trim($_GET['query']);
-
+    $input_local = trim($_GET['local']) == 'on' ? 1 : $input_local;
+    $input_beautify = trim($_GET['beautify']) == 'on'? 1 : $input_beautify;
     if (!empty($input_query)) {
 
         $safe_query = escapeshellarg($input_query);
-
         $command = "./classfieldnum " . $safe_query;
-
+        if($input_local === 1)
+            $command .= " 'local'";
+        if($input_beautify === 1)
+            $command .= " 'beautify'";
         $raw_output = shell_exec($command . " 2>&1");
-
         if ($raw_output !== null) {
             $data = json_decode($raw_output, true);
-
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $error_message = "Ошибка: Программа вернула невалидный JSON. (см. сырой вывод ниже)";
                 $data = null;
@@ -147,7 +150,9 @@ if (isset($_GET['query'])) {
 
         <form action="" method="get">
             <label for="query_input">Введите строку для запроса:</label>
-            <input type="text" id="query_input" name="query" value="<?php echo htmlspecialchars($input_query); ?>" placeholder="Например, +1(800)555-1234...">
+            <input type="text" id="query_input" name="query" value="<?php echo htmlspecialchars($input_query); ?>" placeholder="Например, +7(700)555-1234...">
+            <p><input type="checkbox" id="query_beautify" name="beautify" <?php echo ($input_beautify == 1) ? 'checked="checked"' : ''; ?>> Красивое представление
+            <input type="checkbox" id="query_local" name="local" <?php echo ($input_local == 1) ? 'checked="checked"' : ''; ?>> Местный код</p>
             <input type="submit" value="Отправить">
         </form>
 
@@ -166,7 +171,13 @@ if (isset($_GET['query'])) {
                     <th>Значение</th>
                 </tr>
                 <?php
-                $assoc = array("status"=>"Статус","format"=>"Формат вывода","country"=>"Страна","dialcode"=>"Код набора", "generic"=>"Общее представление", "code"=>"Код");
+                $assoc = array("status"=>"Статус",
+                               "format"=>"Формат вывода",
+                               "country"=>"Страна",
+                               "dialcode"=>"Код набора",
+                               "generic"=>"Общее представление",
+                               "code"=>"Код",
+                               "localcode"=>"Местный код");
                 foreach ($data as $key => $value):
                 ?>
                     <tr>
@@ -177,7 +188,7 @@ if (isset($_GET['query'])) {
                                 echo $value ? 'Да' : 'Нет';
                             } else {
                                 if($key=='status')
-                                   echo htmlspecialchars($value) . ($value == 1?" (Успех)": " (Ошибка)");
+                                   echo htmlspecialchars($value) . ($value ? " (Успех)" : " (Ошибка)");
                                 else
                                     echo htmlspecialchars($value);
                             }
@@ -207,5 +218,6 @@ if (isset($_GET['query'])) {
             <pre><?php echo htmlspecialchars($raw_output); ?></pre>
         <?php endif; ?>
             <h3><?php echo "<a target=\"_blank\" href=\"https://github.com/badcast/ClassifieldPhoneNumber\">Github - исходный код</a>";?></h3> 
-    </div> </body>
+    </div>
+</body>
 </html>

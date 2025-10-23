@@ -29,22 +29,25 @@ struct CountryCode
     std::vector<std::uint32_t> codes;
     std::string country;
     std::string dialcode;
+    std::string localCode;
 
     CountryCode() = default;
     CountryCode(const CountryCode&) = default;
-    CountryCode(CountryCode&& other) : codes(std::move(other.codes)), country(std::move(other.country)), dialcode(std::move(other.dialcode)){}
+    CountryCode(CountryCode&& other) : codes(std::move(other.codes)), country(std::move(other.country)), dialcode(std::move(other.dialcode)), localCode(std::move(other.localCode)){}
 
     CountryCode& operator =(const CountryCode& other){
         codes = other.codes;
         country = other.country;
         dialcode = other.dialcode;
+        localCode = other.localCode;
         return *this;
     }
 
     CountryCode& operator =(CountryCode&& other){
-        codes = (std::move(other.codes));
-        country = (std::move(other.country));
-        dialcode = (std::move(other.dialcode));
+        codes = std::move(other.codes);
+        country = std::move(other.country);
+        dialcode = std::move(other.dialcode);
+        localCode = std::move(other.localCode);
         return *this;
     }
 };
@@ -71,10 +74,13 @@ private:
     static const CountryCodeDB __instance;
 };
 
-enum NumberFormat
+enum NumberFormat : int
 {
-    Beauty,
-    Short
+    Beauty = 0,
+    Compact = 1,
+
+    Global = 0,
+    Local = 2
 };
 
 class NumberPreview
@@ -82,7 +88,7 @@ class NumberPreview
 public:
     NumberPreview(std::string phoneNumber);
 
-    std::string full(NumberFormat format = NumberFormat::Beauty) const;
+    std::string format(int numberFormatFlag = NumberFormat::Beauty) const;
 
     bool isGenericNumber() const;
     bool isEmpty() const;
@@ -156,10 +162,11 @@ NumberPreview::NumberPreview(std::string number) {
 }
 
 
-std::string NumberPreview::full(NumberFormat format) const {
+std::string NumberPreview::format(int numberFormatFlag) const {
+    const CountryCode ccdb = CountryCodeDB::countryCode(countryCode());
     std::string result;
     std::uint64_t _raw;
-    int x,y,len;
+    int x,y,z;
     x = (_numerics >> 48) & 0xFF;
     result.append(x,'0');
     _raw = _numerics & 0xFFFFFFFFFFFF;
@@ -168,19 +175,32 @@ std::string NumberPreview::full(NumberFormat format) const {
         constexpr std::uint8_t vectors[] {3,3,3,2,2};
         std::array<char[8], 5> _parts;
         std::uint64_t tmp,tmp0;
+        std::string _temp;
         for( x = _parts.size() - 1; x > -1; --x)
         {
             int p = std::pow(10, vectors[x]);
             tmp0 = _raw / p;
             tmp = _raw - tmp0 * p;
             _raw = tmp0;
-            std::snprintf(_parts[x], 8, "%s", x > 0 ? numberDouble(tmp, vectors[x]).c_str() : std::to_string(tmp).c_str());
+            if(x == 0)
+            {
+                _temp = std::move(((numberFormatFlag & 0x2) != 0) ? ccdb.localCode.c_str() : ("+" + std::to_string(tmp)).c_str());
+            }
+            else if(x == 1)
+            {
+                _temp = std::move(numberDouble(tmp, vectors[x]));
+            }
+            else
+            {
+                _temp = std::move(numberDouble(tmp, vectors[x]));
+            }
+            std::snprintf(_parts[x], 8, "%s", _temp.c_str());
         }
         result.resize(64);
-        len = std::snprintf(result.data(), 64, (format == NumberFormat::Beauty ? "+%s (%s) %s-%s-%s" : "+%s%s%s%s%s"),
+        z = std::snprintf(result.data(), 64, ((numberFormatFlag & 0x1) == NumberFormat::Beauty ? "%s (%s) %s-%s-%s" : "%s%s%s%s%s"),
                             _parts[0], _parts[1], _parts[2],
                             _parts[3], _parts[4]);
-        result.resize(result.size() - 64 + len);
+        result.resize(result.size() - 64 + z);
     }
     else
     {
@@ -220,7 +240,8 @@ std::string NumberPreview::numberDouble(std::uint32_t num,
     std::string retval;
     while (levels > 0 && num < std::pow(10, --levels))
         retval += '0';
-    retval += std::to_string(num);
+    if(num > 0)
+        retval += std::to_string(num);
     return retval;
 }
 
@@ -257,7 +278,12 @@ CountryCodeDB::CountryCodeDB(const char *classFieldRaw)
                 // Dial code
                 else if(p[y]=='d')
                 {
-                    cIn.dialcode = std::move(std::string(p + y+2,x-y-1));
+                    cIn.dialcode = std::move(std::string(p + y+2,x-y-2));
+                }
+                // Local code
+                else if(p[y]=='l')
+                {
+                    cIn.localCode = std::move(std::string(p + y + 2,x-y-1));
                 }
                 y = x+1;
             }
