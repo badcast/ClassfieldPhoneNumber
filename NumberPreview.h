@@ -217,11 +217,11 @@ std::string NumberPreview::format(int numberFormatFlag) const {
             }
             std::snprintf(_parts[x], 8, "%s", _temp.c_str());
         }
-        result.resize(64);
-        y = std::snprintf(result.data(), 64, ((numberFormatFlag & 0x1) == NumberFormat::Beauty ? "%s (%s) %s-%s-%s" : "%s%s%s%s%s"),
+        result.resize(128);
+        y = std::snprintf(result.data(), 128, ((numberFormatFlag & 0x1) == NumberFormat::Beauty ? "%s (%s) %s-%s-%s" : "%s%s%s%s%s"),
                           _parts[0], _parts[1], _parts[2],
                           _parts[3], _parts[4]);
-        result.resize(result.size() - 64 + y);
+        result.resize(result.size() - 128 + y);
     }
     else
     {
