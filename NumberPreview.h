@@ -187,7 +187,7 @@ std::string NumberPreview::format(int numberFormatFlag) const {
     const CountryCode ccdb = CountryCodeDB::countryCode(countryCode());
     std::string result;
     std::uint64_t _raw;
-    int x,y,z;
+    int x,y;
     x = (_numerics >> 48) & 0xFF;
     result.append(x,'0');
     _raw = _numerics & 0xFFFFFFFFFFFF;
@@ -203,28 +203,25 @@ std::string NumberPreview::format(int numberFormatFlag) const {
             tmp0 = _raw / p;
             tmp = _raw - tmp0 * p;
             _raw = tmp0;
-            if(x == 0)
+            switch(x)
             {
+            case 0:
                 // bit flag is they are Local data.
                 if((_numerics & 0x8000000000000000))
                     tmp = _countryCode;
                 _temp = std::move(((numberFormatFlag & 0x2) != 0) ? ccdb.localCode.c_str() : ("+" + std::to_string(tmp)).c_str());
-            }
-            else if(x == 1)
-            {
+                break;
+            default:
                 _temp = std::move(numberDouble(tmp, vectors[x]));
-            }
-            else
-            {
-                _temp = std::move(numberDouble(tmp, vectors[x]));
+                break;
             }
             std::snprintf(_parts[x], 8, "%s", _temp.c_str());
         }
         result.resize(64);
-        z = std::snprintf(result.data(), 64, ((numberFormatFlag & 0x1) == NumberFormat::Beauty ? "%s (%s) %s-%s-%s" : "%s%s%s%s%s"),
+        y = std::snprintf(result.data(), 64, ((numberFormatFlag & 0x1) == NumberFormat::Beauty ? "%s (%s) %s-%s-%s" : "%s%s%s%s%s"),
                           _parts[0], _parts[1], _parts[2],
                           _parts[3], _parts[4]);
-        result.resize(result.size() - 64 + z);
+        result.resize(result.size() - 64 + y);
     }
     else
     {
