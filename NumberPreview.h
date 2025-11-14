@@ -228,7 +228,7 @@ std::string NumberPreview::format(int numberFormatFlag) const {
     }
     else
     {
-        if(result.empty() && _raw != 0)
+        if(!result.empty() && _raw != 0)
             result += std::to_string(_raw);
     }
     return result;
